@@ -10,4 +10,3 @@ cd os-init-docker
 chmod +x os-init-ubuntu.sh
 ./os-init-ubuntu.sh
 ```
-# os-init-docker
