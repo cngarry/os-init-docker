@@ -101,14 +101,14 @@ echo "deb https://mirrors.aliyun.com/kubernetes/apt/ kubernetes-xenial main" >>/
 echo "$custom_user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 # 安装常用工具
-sudo apt update -y;
-sudo apt remove docker docker-engine docker.io containerd runc -y;
-sudo apt install htop iotop iftop tree wget curl bash-completion jq -y
+apt update -y;
+apt remove docker docker-engine docker.io containerd runc -y;
+apt install htop iotop iftop tree wget curl bash-completion jq -y
 apt install python2.7 -y
 ln -sv /usr/bin/python2.7 /usr/bin/python
 
 # 安装 docker（https://github.com/rancher/install-docker）
-bash install-docker.sh --mirror Aliyun
+sudo bash install-docker.sh --mirror Aliyun
 sudo usermod -aG docker $custom_user;
 
 # 锁定版本，防止自动更新
