@@ -2,68 +2,78 @@
 #
 
 export custom_user=ubuntu
-export docker_version=18.09.9;
-export docker_compose_version=1.25.5
-export node_exporter_version=0.18.1
+export docker_version=19.03.15;
+export docker_compose_version=1.29.2
 
-sudo apt-get remove docker docker-engine docker.io containerd runc -y;
-
-sudo apt-get update -y;
-
-sudo apt-get install apt-transport-https ca-certificates \
-    curl software-properties-common bash-completion  gnupg-agent git -y;
-
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -;
-
-sudo add-apt-repository \
-   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-   $(lsb_release -cs) \
-   stable"
-
-sudo apt-get update -y;
-
-install_version=$( apt-cache madison docker-ce | grep ${docker_version} | awk '{print $3}' );
-
-sudo apt-get install docker-ce=${install_version} docker-ce-cli=${install_version} containerd.io --allow-downgrades -y
-
-sudo usermod -aG docker $custom_user;
-
-sudo systemctl enable docker;
-
-apt-get autoremove  -y
-
-sudo apt-mark hold docker-ce docker-ce-cli
-
-cat > /etc/docker/daemon.json <<EOF
-{
-    "oom-score-adjust": -1000,
-    "log-driver": "json-file",
-    "log-opts": {
-      "max-size": "100m",
-      "max-file": "3"
-    },
-    "max-concurrent-downloads": 10,
-    "max-concurrent-uploads": 10,
-    "storage-driver": "overlay2",
-    "storage-opts": [
-       "overlay2.override_kernel_check=true"
-    ]
-}
-EOF
-
-systemctl daemon-reload && systemctl restart docker
-
-sudo curl -L "https://github.com/docker/compose/releases/download/${docker_compose_version}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
+# 基础调优（参考：https://docs.rancher.cn/docs/rancher2/best-practices/optimize/os/_index）
 cat >> /etc/sysctl.conf<<EOF
+net.bridge.bridge-nf-call-ip6tables=1
+net.bridge.bridge-nf-call-iptables=1
 net.ipv4.ip_forward=1
+net.ipv4.conf.all.forwarding=1
 net.ipv4.neigh.default.gc_thresh1=4096
 net.ipv4.neigh.default.gc_thresh2=6144
 net.ipv4.neigh.default.gc_thresh3=8192
-net.bridge.bridge-nf-call-ip6tables=1
-net.bridge.bridge-nf-call-iptables=1
+net.ipv4.neigh.default.gc_interval=60
+net.ipv4.neigh.default.gc_stale_time=120
+# 参考 https://github.com/prometheus/node_exporter#disabled-by-default
+kernel.perf_event_paranoid=-1
+# sysctls for k8s node config
+net.ipv4.tcp_slow_start_after_idle=0
+net.core.rmem_max=16777216
+fs.inotify.max_user_watches=524288
+kernel.softlockup_all_cpu_backtrace=1
+kernel.softlockup_panic=0
+kernel.watchdog_thresh=30
+fs.file-max=2097152
+fs.inotify.max_user_instances=8192
+fs.inotify.max_queued_events=16384
+vm.max_map_count=262144
+fs.may_detach_mounts=1
+net.core.netdev_max_backlog=16384
+net.ipv4.tcp_wmem=4096 12582912 16777216
+net.core.wmem_max=16777216
+net.core.somaxconn=32768
+net.ipv4.ip_forward=1
+net.ipv4.tcp_max_syn_backlog=8096
+net.ipv4.tcp_rmem=4096 12582912 16777216
+
+net.ipv6.conf.all.disable_ipv6=1
+net.ipv6.conf.default.disable_ipv6=1
+net.ipv6.conf.lo.disable_ipv6=1
+
+kernel.yama.ptrace_scope=0
 vm.swappiness=0
+
+# 可以控制core文件的文件名中是否添加pid作为扩展。
+kernel.core_uses_pid=1
+
+# Do not accept source routing
+net.ipv4.conf.default.accept_source_route=0
+net.ipv4.conf.all.accept_source_route=0
+
+# Promote secondary addresses when the primary address is removed
+net.ipv4.conf.default.promote_secondaries=1
+net.ipv4.conf.all.promote_secondaries=1
+
+# Enable hard and soft link protection
+fs.protected_hardlinks=1
+fs.protected_symlinks=1
+
+# 源路由验证
+# see details in https://help.aliyun.com/knowledge_detail/39428.html
+net.ipv4.conf.all.rp_filter=0
+net.ipv4.conf.default.rp_filter=0
+net.ipv4.conf.default.arp_announce = 2
+net.ipv4.conf.lo.arp_announce=2
+net.ipv4.conf.all.arp_announce=2
+
+# see details in https://help.aliyun.com/knowledge_detail/41334.html
+net.ipv4.tcp_max_tw_buckets=5000
+net.ipv4.tcp_syncookies=1
+net.ipv4.tcp_fin_timeout=30
+net.ipv4.tcp_synack_retries=2
+kernel.sysrq=1
 EOF
 
 echo br_netfilter >> /etc/modules && modprobe br_netfilter
@@ -86,34 +96,48 @@ update-grub
 # 添加 Ubuntu 阿里云 kubernetes 软件仓库
 curl -s https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg | sudo apt-key add -
 echo "deb https://mirrors.aliyun.com/kubernetes/apt/ kubernetes-xenial main" >>/etc/apt/sources.list.d/kubernetes.list
-apt-get update
 
-## 配置sudo免密
+# 配置sudo免密
 echo "$custom_user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
+# 安装常用工具
+sudo apt update -y;
+sudo apt remove docker docker-engine docker.io containerd runc -y;
+sudo apt install htop iotop iftop tree wget curl bash-completion jq -y
+apt install python2.7 -y
+ln -sv /usr/bin/python2.7 /usr/bin/python
 
-# install node exporter
-useradd -M -r -s /bin/false node_exporter
-wget https://github.com/prometheus/node_exporter/releases/download/v${node_exporter_version}/node_exporter-${node_exporter_version}.linux-amd64.tar.gz
-tar xzf node_exporter-${node_exporter_version}.linux-amd64.tar.gz
-cp node_exporter-${node_exporter_version}.linux-amd64/node_exporter /usr/local/bin/
-chown node_exporter:node_exporter /usr/local/bin/node_exporter
-cat > /etc/systemd/system/node_exporter.service <<EOF
-[Unit]
-Description=Prometheus Node Exporter
-Wants=network-online.target
-After=network-online.target
+# 安装 docker（https://github.com/rancher/install-docker）
+bash install-docker.sh --mirror Aliyun
+sudo usermod -aG docker $custom_user;
 
-[Service]
-User=node_exporter
-Group=node_exporter
-Type=simple
-ExecStart=/usr/local/bin/node_exporter
+# 锁定版本，防止自动更新
+sudo apt-mark hold docker-ce docker-ce-cli
 
-[Install]
-WantedBy=multi-user.target
+# 配置docker daemon
+cat > /etc/docker/daemon.json <<EOF
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "oom-score-adjust": -1000,
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m",
+    "max-file": "5"
+  },
+  "max-concurrent-downloads": 10,
+  "max-concurrent-uploads": 10,
+  "storage-driver": "overlay2",
+  "storage-opts": [
+    "overlay2.override_kernel_check=true"
+  ],
+  "registry-mirrors": ["https://7bezldxe.mirror.aliyuncs.com"]
+}
 EOF
 
-systemctl daemon-reload
-systemctl start node_exporter.service
-systemctl enable node_exporter.service
+systemctl daemon-reload && systemctl restart docker
+
+# 安装docker-compose
+sudo curl -L "https://github.com/docker/compose/releases/download/${docker_compose_version}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+history -c
