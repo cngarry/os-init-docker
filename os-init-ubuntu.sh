@@ -84,6 +84,13 @@ cat >> /etc/security/limits.conf <<EOF
 * hard nofile 65536
 EOF
 
+# 安装常用工具
+apt update -y;
+apt remove docker docker-engine docker.io containerd runc -y;
+apt install htop iotop iftop tree wget curl bash-completion jq grub2-common -y
+apt install python2.7 -y
+ln -sv /usr/bin/python2.7 /usr/bin/python
+
 # 关闭交换内存
 swapoff -a
 sed -ir 's/.*swap/#&/g' /etc/fstab
@@ -99,13 +106,6 @@ echo "deb https://mirrors.aliyun.com/kubernetes/apt/ kubernetes-xenial main" >>/
 
 # 配置sudo免密
 echo "$custom_user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-
-# 安装常用工具
-apt update -y;
-apt remove docker docker-engine docker.io containerd runc -y;
-apt install htop iotop iftop tree wget curl bash-completion jq -y
-apt install python2.7 -y
-ln -sv /usr/bin/python2.7 /usr/bin/python
 
 # 安装 docker（https://github.com/rancher/install-docker）
 sudo bash install-docker.sh --mirror Aliyun
