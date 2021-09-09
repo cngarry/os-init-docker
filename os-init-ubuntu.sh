@@ -30,6 +30,7 @@ fs.inotify.max_user_instances=8192
 fs.inotify.max_queued_events=16384
 vm.max_map_count=262144
 fs.may_detach_mounts=1
+net.netfilter.nf_conntrack_max=131072
 net.core.netdev_max_backlog=16384
 net.ipv4.tcp_wmem=4096 12582912 16777216
 net.core.wmem_max=16777216
