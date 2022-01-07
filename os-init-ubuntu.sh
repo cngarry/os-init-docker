@@ -2,7 +2,7 @@
 #
 
 export custom_user=ubuntu
-export docker_version=19.03.15;
+export docker_version=20.10.6;
 export docker_compose_version=1.29.2
 
 # 基础调优（参考：https://docs.rancher.cn/docs/rancher2/best-practices/optimize/os/_index）
